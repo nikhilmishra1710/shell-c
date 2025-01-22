@@ -1,7 +1,39 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
-typedef enum { false, true } bool;
+typedef enum{ false, true} bool;
+
+int is_executable(const char *path) { return access(path, X_OK) == 0; }
+
+char *find_in_path(char *command)
+{
+  char *path_env = getenv("PATH");
+
+  if (path_env == NULL)
+  {
+    return NULL;
+  }
+
+  char *path_copy = strdup(path_env);
+  char *dir = strtok(path_copy, ":");
+
+  static char full_path[1024];
+  while (dir != NULL)
+  {
+    snprintf(full_path, 1024, "%s/%s", dir, command);
+    if (is_executable(full_path))
+    {
+      free(path_copy);
+      return full_path;
+    }
+    dir = strtok(NULL, ":");
+  }
+
+  free(path_copy);
+  return NULL;
+}
 
 int main()
 {
@@ -22,13 +54,43 @@ int main()
     // Remove trailing newline character
     input[strcspn(input, "\n")] = 0;
 
-    if(strcmp(input, "exit 0") == 0)
+    if (strncmp(input, "exit ", 5) == 0)
     {
-      run = false;
+      char *arguments = input + 5;
+      char *endptr;
+      int exit_code = strtol(arguments, &endptr, 10);
+      exit(exit_code);
     }
-    else if(strncmp(input, "echo ", 5) == 0)
+    else if (strncmp(input, "echo ", 5) == 0)
     {
       printf("%s\n", input + 5);
+    }
+    else if (strncmp(input, "type ", 5) == 0)
+    {
+      char builtins[][16] = {"exit", "echo", "type"};
+      char *arguments = input + 5;
+      bool found = false;
+      for (int i = 0; i < sizeof(builtins); i++)
+      {
+        if (strcmp(arguments, builtins[i]) == 0)
+        {
+          printf("%s is a shell builtin\n", arguments);
+          found = true;
+          break;
+        }
+      }
+      if (!found)
+      {
+        char *path = find_in_path(arguments);
+        if (path != NULL)
+        {
+          printf("%s is %s\n", arguments, path);
+        }
+        else
+        {
+          printf("%s: not found\n", arguments);
+        }
+      }
     }
     else
     {
