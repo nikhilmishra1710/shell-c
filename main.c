@@ -75,7 +75,7 @@ void handle_input(char *input)
     }
     else if (strncmp(input, "type ", 5) == 0)
     {
-        char builtins[][16] = {"exit", "echo", "type", "pwd"};
+        char builtins[][16] = {"exit", "echo", "type", "pwd", "cd"};
         char *arguments = input + 5;
         bool found = false;
         for (int i = 0; i < sizeof(builtins); i++)
@@ -108,6 +108,19 @@ void handle_input(char *input)
         {
             perror("getcwd");
         }
+    }
+    else if(strncmp(input, "cd ", 3) == 0)
+    {
+        char *dir = input + 3;
+        if(strcmp(dir, "~") == 0)
+        {
+            dir = getenv("HOME");
+        }
+        if (chdir(dir) < 0)
+        {
+            printf("cd: %s: No such file or directory\n", dir);
+        }
+
     }
     else
     {
