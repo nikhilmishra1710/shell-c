@@ -100,6 +100,14 @@ int parse_input(char *input, char *argv[])
         }
         else
         {
+            if(input[i] == '\\' && !single_quote_open && !double_quote_open)
+            {
+                i++;
+            }
+            if(input[i] == '\0')
+            {
+                break;
+            }
             char current_char[2] = {input[i], '\0'};
             strcat(token, current_char); 
         }
