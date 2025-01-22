@@ -1,14 +1,29 @@
 #include <stdio.h>
+#include <string.h>
 
-int main() {
+typedef enum { false, true } bool;
+
+int main()
+{
   // Flush after every printf
-  setbuf(stdout, NULL);
+  bool run = true;
 
-  // Uncomment this block to pass the first stage
-  printf("$ ");
+  while (run)
+  {
+    setbuf(stdout, NULL);
 
-  // Wait for user input
-  char input[100];
-  fgets(input, 100, stdin);
+    // Uncomment this block to pass the first stage
+    printf("$ ");
+
+    // Wait for user input
+    char input[100];
+    fgets(input, 100, stdin);
+
+    // Remove trailing newline character
+    input[strcspn(input, "\n")] = 0;
+
+    // Print the user input
+    printf("%s: command not found\n", input);
+  }
   return 0;
 }
