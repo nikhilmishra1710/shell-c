@@ -60,44 +60,96 @@ void fork_and_exec_cmd(char *full_path, int argc, char *argv[])
     }
 }
 
+int parse_input(char *input, char *argv[])
+{
+    int argc = 0, i = 0;
+    bool single_quote_open = false;
+    char *arg_start = NULL;
+    char token[1024] = "";
+
+    while (input[i] != '\0')
+    {
+        if (input[i] == '\'' && !single_quote_open)
+        {
+            single_quote_open = true;
+            arg_start = input + i + 1;
+        }
+        else if (input[i] == '\'' && single_quote_open)
+        {
+            single_quote_open = false;
+            input[i] = '\0';
+        }
+        else if ((input[i] == ' ' || input[i] == '\0') && !single_quote_open)
+        {
+            if (strlen(token) > 0)
+            {
+                argv[argc++] = strdup(token);
+                token[0] = '\0'; 
+            }
+        }
+        else
+        {
+            char current_char[2] = {input[i], '\0'};
+            strcat(token, current_char); 
+        }
+        i++;
+    }
+    if (strlen(token) > 0)
+    {
+        
+        argv[argc++] = strdup(token);
+        // printf("argc[%d]: %s\n", argc, argv[argc - 1]);
+    }
+
+    argv[argc] = NULL;
+    // printf("argc: %d\n",argc);
+    return argc;
+}
+
 void handle_input(char *input)
 {
-    if (strncmp(input, "exit ", 5) == 0)
+    char *argv[10];
+    // printf("%s\n",input);
+    int argc = parse_input(input, argv);
+    if (strcmp(argv[0], "exit") == 0)
     {
-        char *arguments = input + 5;
+        
         char *endptr;
-        int exit_code = strtol(arguments, &endptr, 10);
+        int exit_code = strtol(argv[1], &endptr, 10);
         exit(exit_code);
     }
-    else if (strncmp(input, "echo ", 5) == 0)
+    else if (strcmp(argv[0], "echo") == 0)
     {
-        printf("%s\n", input + 5);
+        for(int i=1; i<argc; i++)
+        {
+            printf("%s ", argv[i]);
+        }
+        printf("\n");
     }
-    else if (strncmp(input, "type ", 5) == 0)
+    else if (strcmp(argv[0], "type") == 0)
     {
         char builtins[][16] = {"exit", "echo", "type", "pwd", "cd"};
-        char *arguments = input + 5;
         bool found = false;
         for (int i = 0; i < sizeof(builtins); i++)
         {
-            if (strcmp(arguments, builtins[i]) == 0)
+            if (strcmp(argv[1], builtins[i]) == 0)
             {
-                printf("%s is a shell builtin\n", arguments);
+                printf("%s is a shell builtin\n", argv[1]);
                 return;
             }
         }
 
-        char *path = find_in_path(arguments);
+        char *path = find_in_path(argv[1]);
         if (path != NULL)
         {
-            printf("%s is %s\n", arguments, path);
+            printf("%s is %s\n", argv[1], path);
         }
         else
         {
-            printf("%s: not found\n", arguments);
+            printf("%s: not found\n", argv[1]);
         }
     }
-    else if(strcmp(input, "pwd") == 0)
+    else if(strcmp(argv[0], "pwd") == 0)
     {
         char cwd[1024];
         if (getcwd(cwd, sizeof(cwd)) != NULL)
@@ -109,9 +161,9 @@ void handle_input(char *input)
             perror("getcwd");
         }
     }
-    else if(strncmp(input, "cd ", 3) == 0)
+    else if(strcmp(argv[0], "cd") == 0)
     {
-        char *dir = input + 3;
+        char *dir = argv[1];
         if(strcmp(dir, "~") == 0)
         {
             dir = getenv("HOME");
@@ -124,16 +176,6 @@ void handle_input(char *input)
     }
     else
     {
-        char *argv[10];
-        int argc = 0;
-        char *token = strtok(input, " ");
-        while (token != NULL)
-        {
-            argv[argc] = token;
-            token = strtok(NULL, " ");
-            argc++;
-        }
-        argv[argc] = NULL;
         char *cmd_path = find_in_path(argv[0]);
         if (cmd_path)
         {
