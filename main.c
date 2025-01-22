@@ -63,23 +63,34 @@ void fork_and_exec_cmd(char *full_path, int argc, char *argv[])
 int parse_input(char *input, char *argv[])
 {
     int argc = 0, i = 0;
-    bool single_quote_open = false;
+    bool single_quote_open = false, double_quote_open = false;
     char *arg_start = NULL;
     char token[1024] = "";
 
     while (input[i] != '\0')
     {
-        if (input[i] == '\'' && !single_quote_open)
+        if (input[i] == '"' && !double_quote_open && !single_quote_open)
+        {
+            double_quote_open = true;
+            arg_start = input + i + 1;
+        }
+        else if (input[i] == '"' && double_quote_open && !single_quote_open)
+        {
+            double_quote_open = false;
+            input[i] = '\0';
+        }
+        else
+        if (input[i] == '\'' && !single_quote_open && !double_quote_open)
         {
             single_quote_open = true;
             arg_start = input + i + 1;
         }
-        else if (input[i] == '\'' && single_quote_open)
+        else if (input[i] == '\'' && single_quote_open && !double_quote_open)
         {
             single_quote_open = false;
             input[i] = '\0';
         }
-        else if ((input[i] == ' ' || input[i] == '\0') && !single_quote_open)
+        else if ((input[i] == ' ' || input[i] == '\0') && !single_quote_open && !double_quote_open)
         {
             if (strlen(token) > 0)
             {
