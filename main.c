@@ -75,7 +75,7 @@ void handle_input(char *input)
     }
     else if (strncmp(input, "type ", 5) == 0)
     {
-        char builtins[][16] = {"exit", "echo", "type"};
+        char builtins[][16] = {"exit", "echo", "type", "pwd"};
         char *arguments = input + 5;
         bool found = false;
         for (int i = 0; i < sizeof(builtins); i++)
@@ -95,6 +95,18 @@ void handle_input(char *input)
         else
         {
             printf("%s: not found\n", arguments);
+        }
+    }
+    else if(strcmp(input, "pwd") == 0)
+    {
+        char cwd[1024];
+        if (getcwd(cwd, sizeof(cwd)) != NULL)
+        {
+            printf("%s\n", cwd);
+        }
+        else
+        {
+            perror("getcwd");
         }
     }
     else
