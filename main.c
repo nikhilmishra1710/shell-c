@@ -3,19 +3,6 @@
 
 typedef enum { false, true } bool;
 
-bool compareString(char *str1, char *str2)
-{
-  if (strlen(str1) != strlen(str2))
-  {
-    return false;
-  }
-  else if(strcmp(str1, str2) != 0)
-  {
-    return false;
-  }
-  return true;
-}
-
 int main()
 {
   // Flush after every printf
@@ -35,10 +22,16 @@ int main()
     // Remove trailing newline character
     input[strcspn(input, "\n")] = 0;
 
-    if(compareString(input, "exit 0"))
+    if(strcmp(input, "exit 0") == 0)
     {
       run = false;
-    }else{
+    }
+    else if(strncmp(input, "echo ", 5) == 0)
+    {
+      printf("%s\n", input + 5);
+    }
+    else
+    {
       printf("%s: command not found\n", input);
     }
     // Print the user input
