@@ -1,11 +1,17 @@
 #include <ctype.h>
+#include <limits.h>
+#include <linux/limits.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <sys/types.h>
+#include <termios.h>
+#include <dirent.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 #define ARRAY_SIZE(x) sizeof(x) / sizeof(x[0])
 #define MAX_TOKENS 100
@@ -21,6 +27,14 @@ int process_echo(char *args[], int argc, char *out_file, int out_file_type, int 
 int process_type(char *args[], int argc, char *out_file, int out_file_type, int mode);
 int process_pwd(char *args[], int argc, char *out_file, int out_file_type, int mode);
 int process_cd(char *args[], int argc, char *out_file, int out_file_type, int mode);
+void disable_raw_mode();
+void enable_raw_mode();
+int autocomplete(char *input, int double_tab, int *partial_completion);
+bool is_duplicate(char possible[][PATH_MAX], int count, char *name);
+int compare_strings(const void *a, const void *b);
+void longest_common_prefix(char strings[][PATH_MAX], int count, char *result);
+
+struct termios orig_termios;
 
 typedef enum
 {
@@ -48,20 +62,90 @@ int main()
 {
 
     char input[1024];
-
+    int index = 0;
     char *args[MAX_TOKENS];
-
+    enable_raw_mode();
+    int double_tab = 0;
     while (1)
     {
 
         // Flush after every printf
         setbuf(stdout, NULL);
         printf("$ ");
+        index = 0;
         memset(input, 0, 1024);
-        fgets(input, 1024, stdin);
+        while (1)
+        {
+            char c;
+            if (read(STDIN_FILENO, &c, 1) == -1)
+            {
+                perror("Read Error");
+                exit(EXIT_FAILURE);
+            }
+            // printf("%d\n", c);
+            if (c == '\n')
+            {
+                input[index] = '\0';
+                printf("\n");
+                double_tab = 0;
+                break;
+            }
+            if (c == '\t')
+            {
+                int partial_completion = 0;
+                int newLen = autocomplete(input, double_tab, &partial_completion);
+                if (newLen > 0)
+                {
+                    for (int i = index; i > 0; i--)
+                    {
+                        printf("\b \b");
+                    }
+                    index = newLen;
+                    if (partial_completion == 0)
+                    {
+                        input[index++] = ' ';
+                        input[index] = '\0';
+                    }
+                    printf("%s", input);
+                    double_tab = 0;
+                    // printf(" %d %d", partial_completion, index);
+                }
+                else if (newLen == 0)
+                {
 
-        input[strcspn(input, "\n")] = '\0';
+                    printf("$ %s", input);
+                    double_tab = 0;
+                }
+                else
+                {
+                    printf("\a");
+                    double_tab = 1;
+                }
+                continue;
+            }
+            if (c == 127)
+            {
+                if (index > 0)
+                {
+                    index--;
+                    printf("\b \b");
+                }
 
+                double_tab = 0;
+                continue;
+            }
+            input[index] = c;
+            printf("%c", c);
+            double_tab = 0;
+            index++;
+        }
+        // fgets(input, 1024, stdin);
+
+        if (index == 0)
+        {
+            continue;
+        }
+        // input[strcspn(input, "\n")] = '\0';
         int token_num = tokenize(input, args);
 
         char *out_file = NULL;
@@ -171,6 +255,7 @@ int main()
         {
             free(args[i]);
         }
+
         if (dup2(saved_stdout, out_file_type) < 0)
         {
             perror("dup2 restore");
@@ -512,4 +597,193 @@ int process_cd(char *args[], int argc, char *out_file, int out_file_type, int mo
         printf("cd: %s: No such file or directory\n", args[1]);
     }
     return 0;
+}
+
+void disable_raw_mode()
+{
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios);
+}
+
+void enable_raw_mode()
+{
+    tcgetattr(STDIN_FILENO, &orig_termios);
+    atexit(disable_raw_mode);
+
+    struct termios raw = orig_termios;
+    raw.c_lflag &= ~(ECHO | ICANON);
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+
+int autocomplete(char *input, int double_tab, int *partial_completion)
+{
+
+    // printf("\nIn autocomplete: %s\n", input);
+    if (double_tab)
+    {
+        printf("\n");
+    }
+    int found = 0, idx = -1;
+    for (int i = 0; i < ARRAY_SIZE(builtin_commands); i++)
+    {
+        if ((strncmp(input, builtin_commands[i].name,
+                     strlen(input)) == 0))
+        {
+            // printf("%s\n", builtin_commands[i].name);
+            found = 1;
+            idx = i;
+        }
+    }
+
+    if (found == 1)
+    {
+        strcpy(input, builtin_commands[idx].name);
+        return strlen(builtin_commands[idx].name);
+    }
+
+    char *path_env = getenv("PATH");
+    // printf("\n%s\n", path_env);
+
+    if (path_env == NULL)
+        return -1;
+    char *path_copy = strdup(path_env);
+    char *dir = strtok(path_copy, ":");
+
+    char possible[1000][PATH_MAX];
+    int possible_count = 0;
+
+    while (dir != NULL)
+    {
+        DIR *dp = opendir(dir);
+        if (dp == NULL)
+        {
+            dir = strtok(NULL, ":");
+            continue;
+        }
+
+        struct dirent *entry;
+        while ((entry = readdir(dp)) != NULL)
+        {
+            // Check if the file name starts with input
+            if (strncmp(entry->d_name, input, strlen(input)) == 0)
+            {
+                // Construct the full path
+                char full_path[PATH_MAX];
+                snprintf(full_path, sizeof(full_path), "%s/%s", dir, entry->d_name);
+
+                // Check if it's executable
+                if (access(full_path, X_OK) == 0 && !is_duplicate(possible, possible_count, entry->d_name))
+                {
+                    strcpy(possible[possible_count++], entry->d_name);
+                }
+            }
+        }
+
+        closedir(dp);
+        dir = strtok(NULL, ":");
+    }
+
+    if (possible_count == 0)
+    {
+        // printf("\a"); // Bell sound for no match
+        free(path_copy);
+        return -1;
+    }
+
+    if (possible_count == 1)
+    {
+        // printf("Partial completion: %u\n", *partial_completion);
+        strcpy(input, possible[0]);
+        free(path_copy);
+        return strlen(possible[0]);
+    }
+
+    // Find the longest common prefix
+    char lcp[PATH_MAX];
+    longest_common_prefix(possible, possible_count, lcp);
+
+    if (strlen(lcp) > strlen(input))
+    {
+        strcpy(input, lcp);
+        free(path_copy);
+        *partial_completion = 1;
+        return strlen(lcp);
+    }
+
+    // On double tab, show all possibilities
+    if (double_tab)
+    {
+        qsort(possible, possible_count, PATH_MAX, compare_strings);
+        for (int i = 0; i < possible_count; i++)
+        {
+            printf("%s  ", possible[i]);
+        }
+        printf("\n");
+        return 0;
+    }
+
+    free(path_copy);
+    return -1;
+
+    if (double_tab)
+    {
+        for (int i = 0; i < possible_count; i++)
+        {
+            printf("%s  ", possible[i]);
+        }
+        printf("\n");
+        free(path_copy);
+        return 0;
+    }
+    if (possible_count == 1)
+    {
+        strcpy(input, possible[0]);
+        return strlen(possible[0]);
+    }
+
+    free(path_copy);
+    return -1; // Command not found
+}
+
+bool is_duplicate(char possible[][PATH_MAX], int count, char *name)
+{
+    for (int i = 0; i < count; i++)
+    {
+        if (strcmp(possible[i], name) == 0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Comparison function for qsort
+int compare_strings(const void *a, const void *b)
+{
+    return strcmp((const char *)a, (const char *)b);
+}
+
+// Function to find the longest common prefix
+void longest_common_prefix(char strings[][PATH_MAX], int count, char *result)
+{
+    if (count == 0)
+    {
+        result[0] = '\0';
+        return;
+    }
+
+    int index = 0;
+    while (1)
+    {
+        char current_char = strings[0][index];
+        for (int i = 1; i < count; i++)
+        {
+            if (strings[i][index] != current_char || strings[i][index] == '\0')
+            {
+                result[index] = '\0';
+                return;
+            }
+        }
+        result[index] = current_char;
+        index++;
+    }
 }
