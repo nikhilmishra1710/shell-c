@@ -24,6 +24,7 @@ int tokenize(const char *line, char **tokens);
 int is_executable(const char *path);
 char *find_in_path(const char *command);
 void fork_and_execute(char *cmd_path, int argc, char **args, char *out_file, int out_file_type, int mode);
+void execute_pipe_cmd(char **cmds, int cmd_count);
 int process_exit(char *args[], int argc, char *out_file, int out_file_type, int mode);
 int process_echo(char *args[], int argc, char *out_file, int out_file_type, int mode);
 int process_type(char *args[], int argc, char *out_file, int out_file_type, int mode);
@@ -52,6 +53,13 @@ typedef struct builtin_command_t
     int (*process)(char *args[], int argc, char *out_file, int out_file_type, int mode);
 } builtin_command_t;
 
+typedef struct cmd_history_t
+{
+    char *cmd;
+    struct cmd_history_t *next;
+    struct cmd_history_t *prev;
+} cmd_history_t;
+
 builtin_command_t builtin_commands[] = {
     {"exit", process_exit},
     {"echo", process_echo},
@@ -64,28 +72,56 @@ int main()
 {
 
     char input[1024];
-    int index = 0;
-    char *args[MAX_TOKENS], *cmd[MAX_TOKENS];
-    enable_raw_mode();
+    int index = 0, edit_index = 0;
+    char *cmd[MAX_TOKENS];
     int double_tab = 0;
+    cmd_history_t *curr = NULL, *tail = NULL;
     while (1)
     {
 
         // Flush after every printf
+        enable_raw_mode();
         setbuf(stdout, NULL);
         printf("$ ");
-        index = 0;
+        index = 0, edit_index = 0;
         memset(input, 0, 1024);
+        curr = (cmd_history_t *)malloc(sizeof(cmd_history_t));
+        if (curr == NULL)
+        {
+            perror("malloc");
+            exit(EXIT_FAILURE);
+        }
+        curr->cmd = (char *)malloc(1024);
+        if (curr->cmd == NULL)
+        {
+            perror("malloc");
+            exit(EXIT_FAILURE);
+        }
+        if (tail != NULL)
+        {
+            curr->next = NULL;
+            tail->next = curr;
+            curr->prev = tail;
+            tail = curr;
+        }
+        else
+        {
+            curr->next = NULL;
+            curr->prev = NULL;
+            tail = curr;
+        }
+
         while (1)
         {
+            // printf("Loop: %d %d\n", index, edit_index);
+            strcpy(curr->cmd, input);
             char c;
             if (read(STDIN_FILENO, &c, 1) == -1)
             {
                 perror("Read Error");
                 exit(EXIT_FAILURE);
             }
-            // printf("%d\n", c);
-            if (c == '\033') // Escape character
+            if (c == '\033')
             {
                 char seq[2];
                 if (read(STDIN_FILENO, &seq[0], 1) == -1 || read(STDIN_FILENO, &seq[1], 1) == -1)
@@ -96,18 +132,102 @@ int main()
                     if (seq[1] == 'A')
                     {
                         // Up Arrow Key Pressed
-                        printf("\n[Up Arrow Detected]\n");
+                        if (curr->prev == NULL)
+                        {
+                            printf("\a");
+                            continue;
+                        }
+                        for (int i = 0; i < index; i++)
+                        {
+                            printf("\b \b");
+                        }
+                        curr = curr->prev;
+                        strcpy(input, curr->cmd);
+                        printf("\r$ %s", input);
+                        index = strlen(input);
+                        edit_index = index;
+                        // printf("\r%d %d\n", index, edit_index);
+                        // printf("\n[Up Arrow Detected]\n");
                     }
                     else if (seq[1] == 'B')
                     {
+                        if (curr->next == NULL)
+                        {
+                            printf("\a");
+                            continue;
+                        }
+                        for (int i = 0; i < index; i++)
+                        {
+                            printf("\b \b");
+                        }
+                        curr = curr->next;
+                        printf("Text: %s\n", curr->cmd);
+                        strcpy(input, curr->cmd);
+                        printf("\r$ %s", input);
+                        index = strlen(input);
+                        edit_index = index;
                         // Down Arrow Key Pressed
-                        printf("\n[Down Arrow Detected]\n");
-                    }else if(seq[1] == 'C'){
-                        // Right Arrow Key Pressed
-                        printf("\n[Right Arrow Detected]\n");
-                    }else if(seq[1] == 'D'){
+                        // printf("\n[Down Arrow Detected]\n");
+                    }
+                    else if (seq[1] == 'C')
+                    {
+                        // Right Arrow Key Pressed'
+                        if (edit_index < index)
+                        {
+                            printf("\033[C");
+                            edit_index++;
+                        }
+                        else
+                        {
+                            printf("\a");
+                        }
+                        // printf("\n[Right Arrow Detected]\n");
+                    }
+                    else if (seq[1] == 'D')
+                    {
                         // Left Arrow Key Pressed
-                        printf("\n[Left Arrow Detected]\n");
+                        if (edit_index > 0)
+                        {
+                            printf("\033[D");
+                            edit_index--;
+                        }
+                        else
+                        {
+                            printf("\a");
+                        }
+                        // printf("\n[Left Arrow Detected]\n");
+                    }
+                    else if (seq[1] == '3')
+                    {
+                        char del;
+                        if (read(STDIN_FILENO, &del, 1) == -1)
+                        {
+                            continue;
+                        }
+                        if (del == '~')
+                        {
+                            // Delete Key Pressed
+                            if (edit_index < index)
+                            {
+                                for (int i = edit_index; i < index; i++)
+                                {
+                                    printf("\033[C");
+                                }
+                                for (int i = edit_index; i < index; i++)
+                                {
+                                    input[i] = input[i + 1];
+                                    printf("\b \b");
+                                }
+                                index--;
+                                input[index] = '\0';
+                                strcpy(curr->cmd, input);
+                                printf("\r$ %s", input);
+                                for (int i = edit_index; i < index; i++)
+                                {
+                                    printf("\033[D");
+                                }
+                            }
+                        }
                     }
                 }
                 continue;
@@ -115,6 +235,8 @@ int main()
             if (c == '\n')
             {
                 input[index] = '\0';
+                strcpy(tail->cmd, input);
+                // printf("\n%s", tail->cmd);
                 printf("\n");
                 double_tab = 0;
                 break;
@@ -136,6 +258,7 @@ int main()
                         input[index] = '\0';
                     }
                     printf("%s", input);
+                    strcpy(tail->cmd, input);
                     double_tab = 0;
                     // printf(" %d %d", partial_completion, index);
                 }
@@ -154,19 +277,60 @@ int main()
             }
             if (c == 127)
             {
-                if (index > 0)
+                // printf("Edit: %d\n", edit_index);
+                // printf("\nBackspace: %d %d\n", index, edit_index);
+                if (edit_index == index && index > 0)
                 {
-                    index--;
                     printf("\b \b");
+                    index--;
+                    edit_index--;
+                    input[index] = '\0';
+                    strcpy(tail->cmd, input);
+                    continue;
                 }
+                if (edit_index < index)
+                {
+                    // printf("%d %d\n", index, edit_index);
+                    for (int i = edit_index; i < index; i++)
+                    {
+                        printf("\033[C");
+                    }
+                    for (int i = edit_index; i < index; i++)
+                    {
+                        input[i - 1] = input[i];
+                        printf("\b \b");
+                        // printf("\033[D");
 
+                        // tail->cmd[i - 1] = tail->cmd[i];
+                    }
+                    // printf("\b \b");
+                    edit_index--;
+                    index--;
+                    input[index] = '\0';
+                    strcpy(tail->cmd, input);
+                    printf("\r$ %s", input);
+
+                    for (int i = edit_index; i < index; i++)
+                    {
+                        printf("\033[D");
+                    }
+                    // printf("\b \b");
+                }
+                // tail->cmd[index] = '\0';
                 double_tab = 0;
                 continue;
             }
-            input[index] = c;
+
+            input[edit_index] = c;
+            strcpy(tail->cmd, input);
             printf("%c", c);
             double_tab = 0;
-            index++;
+            edit_index++;
+            if (edit_index > index)
+            {
+                // printf("Index updated");
+                index++;
+            }
         }
         // fgets(input, 1024, stdin);
 
@@ -181,9 +345,12 @@ int main()
         {
             continue;
         }
-        else if(cmd_count == 1){
+        else if (cmd_count == 1)
+        {
             execute_cmd(input);
-        }else{
+        }
+        else
+        {
             execute_pipe_cmd(cmd, cmd_count);
         }
         // else if(cmd_count>1){
@@ -343,47 +510,62 @@ void finish_token(char *buffer, int *buf_idx, char **tokens, int *token_count)
     }
 }
 
-void execute_pipe_cmd(char **cmds, int cmd_count){
+void execute_pipe_cmd(char **cmds, int cmd_count)
+{
     int pipefd[2];
     int prev_pipe = STDIN_FILENO;
-    for(int i = 0; i < cmd_count; i++){
+    for (int i = 0; i < cmd_count; i++)
+    {
         char *args[MAX_TOKENS];
         // int token_num = tokenize(cmds[i], args);
-        if(i < cmd_count - 1){
-            if(pipe(pipefd) < 0){
+        if (i < cmd_count - 1)
+        {
+            if (pipe(pipefd) < 0)
+            {
                 perror("pipe");
                 exit(EXIT_FAILURE);
             }
         }
         // printf("%d\n", i);
         pid_t pid = fork();
-        if(pid == 0){
-            if(i < cmd_count - 1){
-                if(dup2(pipefd[1], STDOUT_FILENO) < 0){
+        if (pid == 0)
+        {
+            if (i < cmd_count - 1)
+            {
+                if (dup2(pipefd[1], STDOUT_FILENO) < 0)
+                {
                     perror("dup2 pipe write");
                     exit(EXIT_FAILURE);
                 }
             }
-            if(i > 0){
-                if(dup2(prev_pipe, STDIN_FILENO) < 0){
+            if (i > 0)
+            {
+                if (dup2(prev_pipe, STDIN_FILENO) < 0)
+                {
                     perror("dup2 pipe read");
                     exit(EXIT_FAILURE);
                 }
             }
-            if(i < cmd_count - 1){
+            if (i < cmd_count - 1)
+            {
                 close(pipefd[0]);
                 close(pipefd[1]);
             }
-            
+
             execute_cmd(cmds[i]);
             exit(EXIT_SUCCESS);
-        }else if(pid < 0){
+        }
+        else if (pid < 0)
+        {
             perror("fork");
             exit(EXIT_FAILURE);
-        }else{
+        }
+        else
+        {
             int status;
             waitpid(pid, &status, 0);
-            if(i < cmd_count - 1){
+            if (i < cmd_count - 1)
+            {
                 close(pipefd[1]);
                 prev_pipe = pipefd[0];
             }
@@ -417,7 +599,8 @@ int tokenize_cmd(const char *input, char *cmds[MAX_TOKENS])
 
     while (cmd && count < MAX_TOKENS)
     {
-        while(isspace((unsigned char)*cmd)){
+        while (isspace((unsigned char)*cmd))
+        {
             cmd++;
         }
         // printf("%s\n", cmd);
@@ -744,17 +927,32 @@ int process_cd(char *args[], int argc, char *out_file, int out_file_type, int mo
 
 void disable_raw_mode()
 {
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios);
+    struct termios term;
+    tcgetattr(STDIN_FILENO, &term);
+
+    term.c_lflag |= ICANON; // Enable canonical mode
+    term.c_lflag |= ECHO;   // Enable echo
+
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &term);
 }
 
 void enable_raw_mode()
 {
-    tcgetattr(STDIN_FILENO, &orig_termios);
+    struct termios term;
+    tcgetattr(STDIN_FILENO, &term);
+
+    term.c_lflag &= ~ICANON; // Disable canonical mode
+    term.c_lflag &= ~ECHO;   // Disable echo
+    term.c_cc[VMIN] = 1;     // Read one character at a time
+    term.c_cc[VTIME] = 0;    // No timeout
+
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &term);
+    // tcgetattr(STDIN_FILENO, &orig_termios);
     atexit(disable_raw_mode);
 
-    struct termios raw = orig_termios;
-    raw.c_lflag &= ~(ECHO | ICANON);
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+    // struct termios raw = orig_termios;
+    // raw.c_lflag &= ~(ECHO | ICANON);
+    // tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
 int autocomplete(char *input, int double_tab, int *partial_completion)
