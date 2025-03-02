@@ -18,6 +18,8 @@
 #define MAX_LENGTH 256
 
 void finish_token(char *buffer, int *buf_idx, char **tokens, int *token_count);
+void execute_cmd(char *input);
+int tokenize_cmd(const char *input, char *cmds[MAX_TOKENS]);
 int tokenize(const char *line, char **tokens);
 int is_executable(const char *path);
 char *find_in_path(const char *command);
@@ -63,7 +65,7 @@ int main()
 
     char input[1024];
     int index = 0;
-    char *args[MAX_TOKENS];
+    char *args[MAX_TOKENS], *cmd[MAX_TOKENS];
     enable_raw_mode();
     int double_tab = 0;
     while (1)
@@ -83,6 +85,33 @@ int main()
                 exit(EXIT_FAILURE);
             }
             // printf("%d\n", c);
+            if (c == '\033') // Escape character
+            {
+                char seq[2];
+                if (read(STDIN_FILENO, &seq[0], 1) == -1 || read(STDIN_FILENO, &seq[1], 1) == -1)
+                    continue;
+
+                if (seq[0] == '[')
+                {
+                    if (seq[1] == 'A')
+                    {
+                        // Up Arrow Key Pressed
+                        printf("\n[Up Arrow Detected]\n");
+                    }
+                    else if (seq[1] == 'B')
+                    {
+                        // Down Arrow Key Pressed
+                        printf("\n[Down Arrow Detected]\n");
+                    }else if(seq[1] == 'C'){
+                        // Right Arrow Key Pressed
+                        printf("\n[Right Arrow Detected]\n");
+                    }else if(seq[1] == 'D'){
+                        // Left Arrow Key Pressed
+                        printf("\n[Left Arrow Detected]\n");
+                    }
+                }
+                continue;
+            }
             if (c == '\n')
             {
                 input[index] = '\0';
@@ -146,125 +175,151 @@ int main()
             continue;
         }
         // input[strcspn(input, "\n")] = '\0';
-        int token_num = tokenize(input, args);
 
-        char *out_file = NULL;
-        int out_file_type = STDOUT_FILENO;
-        int mode = O_WRONLY | O_CREAT | O_TRUNC;
-        for (int i = 0; i < token_num; i++)
+        int cmd_count = tokenize_cmd(input, cmd);
+        if (cmd_count == 0)
         {
-            if (strcmp(args[i], ">") == 0 || strcmp(args[i], "1>") == 0)
-            {
-                if (i + 1 < token_num)
-                {
-                    out_file = args[i + 1];
-                }
-                for (int j = i; j + 2 <= token_num; j++)
-                {
-                    args[j] = args[j + 2];
-                }
-                token_num -= 2;
-                out_file_type = STDOUT_FILENO;
-                mode = O_WRONLY | O_CREAT | O_TRUNC;
-                break;
-            }
-            if (strcmp(args[i], "2>") == 0)
-            {
-                if (i + 1 < token_num)
-                {
-                    out_file = args[i + 1];
-                }
-                for (int j = i; j + 2 <= token_num; j++)
-                {
-                    args[j] = args[j + 2];
-                }
-                token_num -= 2;
-                out_file_type = STDERR_FILENO;
-                mode = O_WRONLY | O_CREAT | O_TRUNC;
-                break;
-            }
-            if (strcmp(args[i], ">>") == 0 || strcmp(args[i], "1>>") == 0)
-            {
-                if (i + 1 < token_num)
-                {
-                    out_file = args[i + 1];
-                }
-                for (int j = i; j + 2 <= token_num; j++)
-                {
-                    args[j] = args[j + 2];
-                }
-                token_num -= 2;
-                out_file_type = STDOUT_FILENO;
-                mode = O_WRONLY | O_CREAT | O_APPEND;
-                break;
-            }
-            if (strcmp(args[i], "2>>") == 0)
-            {
-                if (i + 1 < token_num)
-                {
-                    out_file = args[i + 1];
-                }
-                for (int j = i; j + 2 <= token_num; j++)
-                {
-                    args[j] = args[j + 2];
-                }
-                token_num -= 2;
-                out_file_type = STDERR_FILENO;
-                mode = O_WRONLY | O_CREAT | O_APPEND;
-                break;
-            }
+            continue;
         }
-        args[token_num] = NULL;
+        else if(cmd_count == 1){
+            execute_cmd(input);
+        }else{
+            execute_pipe_cmd(cmd, cmd_count);
+        }
+        // else if(cmd_count>1){
+        //     printf("Multiple commands not supported\n");
 
-        int saved_stdout = dup(out_file_type);
-        if (saved_stdout < 0)
-        {
-            perror("stdout");
-            exit(EXIT_FAILURE);
-        }
+        //     continue;
+        // }
 
-        int found = 0;
-        int check = 0;
-        for (int i = 0; i < ARRAY_SIZE(builtin_commands); i++)
-        {
-            if (strncmp(args[0], builtin_commands[i].name,
-                        strlen(builtin_commands[i].name)) == 0)
-            {
-                check = builtin_commands[i].process(args, token_num, out_file, out_file_type, mode);
-                found = 1;
-            }
-        }
-
-        if (found == 0)
-        {
-            char *cmd_path = find_in_path(args[0]);
-            if (cmd_path != NULL)
-            {
-                args[token_num] = NULL;
-                fork_and_execute(cmd_path, token_num, args, out_file, out_file_type, mode);
-                found = 1;
-            }
-        }
-
-        if (found == 0 || check != 0)
-        {
-            printf("%s: command not found\n", args[0]);
-        }
-
-        for (int i = 0; i < token_num; i++)
-        {
-            free(args[i]);
-        }
-
-        if (dup2(saved_stdout, out_file_type) < 0)
-        {
-            perror("dup2 restore");
-            exit(EXIT_FAILURE);
-        }
-        close(saved_stdout);
+        // execute_cmd(input);
     }
 
     return 0;
+}
+
+void execute_cmd(char *input)
+{
+
+    char *out_file = NULL;
+    int out_file_type = STDOUT_FILENO;
+    int mode = O_WRONLY | O_CREAT | O_TRUNC;
+    char *args[MAX_TOKENS];
+    int token_num = tokenize(input, args);
+
+    for (int i = 0; i < token_num; i++)
+    {
+        if (strcmp(args[i], ">") == 0 || strcmp(args[i], "1>") == 0)
+        {
+            if (i + 1 < token_num)
+            {
+                out_file = args[i + 1];
+            }
+            for (int j = i; j + 2 <= token_num; j++)
+            {
+                args[j] = args[j + 2];
+            }
+            token_num -= 2;
+            out_file_type = STDOUT_FILENO;
+            mode = O_WRONLY | O_CREAT | O_TRUNC;
+            break;
+        }
+        if (strcmp(args[i], "2>") == 0)
+        {
+            if (i + 1 < token_num)
+            {
+                out_file = args[i + 1];
+            }
+            for (int j = i; j + 2 <= token_num; j++)
+            {
+                args[j] = args[j + 2];
+            }
+            token_num -= 2;
+            out_file_type = STDERR_FILENO;
+            mode = O_WRONLY | O_CREAT | O_TRUNC;
+            break;
+        }
+        if (strcmp(args[i], ">>") == 0 || strcmp(args[i], "1>>") == 0)
+        {
+            if (i + 1 < token_num)
+            {
+                out_file = args[i + 1];
+            }
+            for (int j = i; j + 2 <= token_num; j++)
+            {
+                args[j] = args[j + 2];
+            }
+            token_num -= 2;
+            out_file_type = STDOUT_FILENO;
+            mode = O_WRONLY | O_CREAT | O_APPEND;
+            break;
+        }
+        if (strcmp(args[i], "2>>") == 0)
+        {
+            if (i + 1 < token_num)
+            {
+                out_file = args[i + 1];
+            }
+            for (int j = i; j + 2 <= token_num; j++)
+            {
+                args[j] = args[j + 2];
+            }
+            token_num -= 2;
+            out_file_type = STDERR_FILENO;
+            mode = O_WRONLY | O_CREAT | O_APPEND;
+            break;
+        }
+    }
+    args[token_num] = NULL;
+
+    int saved_stdout = dup(out_file_type);
+    if (saved_stdout < 0)
+    {
+        perror("stdout");
+        exit(EXIT_FAILURE);
+    }
+
+    int found = 0;
+    int check = 0;
+    for (int i = 0; i < ARRAY_SIZE(builtin_commands); i++)
+    {
+        if (strncmp(args[0], builtin_commands[i].name,
+                    strlen(builtin_commands[i].name)) == 0)
+        {
+            check = builtin_commands[i].process(args, token_num, out_file, out_file_type, mode);
+            printf("Builtin execution complete\n");
+            found = 1;
+        }
+    }
+
+    if (found == 0)
+    {
+        char *cmd_path = find_in_path(args[0]);
+        if (cmd_path != NULL)
+        {
+            args[token_num] = NULL;
+            fork_and_execute(cmd_path, token_num, args, out_file, out_file_type, mode);
+            found = 1;
+        }
+    }
+
+    if (found == 0 || check != 0)
+    {
+        printf("%s: command not found\n", args[0]);
+    }
+
+    for (int i = 0; i < token_num; i++)
+    {
+        free(args[i]);
+    }
+
+    if (dup2(saved_stdout, out_file_type) < 0)
+    {
+        perror("dup2 restore");
+        exit(EXIT_FAILURE);
+    }
+
+    close(saved_stdout);
 }
 
 void finish_token(char *buffer, int *buf_idx, char **tokens, int *token_count)
@@ -286,6 +341,94 @@ void finish_token(char *buffer, int *buf_idx, char **tokens, int *token_count)
         (*token_count)++;
         *buf_idx = 0;
     }
+}
+
+void execute_pipe_cmd(char **cmds, int cmd_count){
+    int pipefd[2];
+    int prev_pipe = STDIN_FILENO;
+    for(int i = 0; i < cmd_count; i++){
+        char *args[MAX_TOKENS];
+        // int token_num = tokenize(cmds[i], args);
+        if(i < cmd_count - 1){
+            if(pipe(pipefd) < 0){
+                perror("pipe");
+                exit(EXIT_FAILURE);
+            }
+        }
+        // printf("%d\n", i);
+        pid_t pid = fork();
+        if(pid == 0){
+            if(i < cmd_count - 1){
+                if(dup2(pipefd[1], STDOUT_FILENO) < 0){
+                    perror("dup2 pipe write");
+                    exit(EXIT_FAILURE);
+                }
+            }
+            if(i > 0){
+                if(dup2(prev_pipe, STDIN_FILENO) < 0){
+                    perror("dup2 pipe read");
+                    exit(EXIT_FAILURE);
+                }
+            }
+            if(i < cmd_count - 1){
+                close(pipefd[0]);
+                close(pipefd[1]);
+            }
+            
+            execute_cmd(cmds[i]);
+            exit(EXIT_SUCCESS);
+        }else if(pid < 0){
+            perror("fork");
+            exit(EXIT_FAILURE);
+        }else{
+            int status;
+            waitpid(pid, &status, 0);
+            if(i < cmd_count - 1){
+                close(pipefd[1]);
+                prev_pipe = pipefd[0];
+            }
+        }
+    }
+}
+
+int tokenize_cmd(const char *input, char *cmds[MAX_TOKENS])
+{
+    char *cmd;
+    char *working_cp = strdup(input);
+    int count = 0;
+    bool double_quote = false, single_quote = false;
+    for (int i = 0; i < strlen(working_cp); i++)
+    {
+        if (working_cp[i] == '"')
+        {
+            double_quote = !double_quote;
+        }
+        if (working_cp[i] == '\'')
+        {
+            single_quote = !single_quote;
+        }
+        if (working_cp[i] == '|' && (double_quote || single_quote))
+        {
+            working_cp[i] = ' ';
+        }
+    }
+
+    cmd = strtok(working_cp, "|");
+
+    while (cmd && count < MAX_TOKENS)
+    {
+        while(isspace((unsigned char)*cmd)){
+            cmd++;
+        }
+        // printf("%s\n", cmd);
+        cmds[count++] = strdup(cmd);
+        cmd = strtok(NULL, "|");
+    }
+
+    cmds[count] = NULL;
+    free(working_cp);
+
+    return count;
 }
 
 int tokenize(const char *line, char **tokens)
@@ -756,13 +899,11 @@ bool is_duplicate(char possible[][PATH_MAX], int count, char *name)
     return false;
 }
 
-// Comparison function for qsort
 int compare_strings(const void *a, const void *b)
 {
     return strcmp((const char *)a, (const char *)b);
 }
 
-// Function to find the longest common prefix
 void longest_common_prefix(char strings[][PATH_MAX], int count, char *result)
 {
     if (count == 0)
