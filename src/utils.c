@@ -1,8 +1,10 @@
 #include "include/utils.h"
+#include <linux/limits.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 string* allocate_string() {
     string* temp = (string*) malloc(sizeof(string));
@@ -17,14 +19,16 @@ string* allocate_string() {
 }
 
 string* allocate_string_chars(char* chars) {
-    if(chars==NULL) return allocate_string();
+    if (chars == NULL)
+        return allocate_string();
     string* temp = (string*) malloc(sizeof(string));
-    temp->size = (int)strlen(chars);
+    temp->size = (int) strlen(chars);
     temp->capacity = 1024;
-    while(temp->capacity < temp->size) temp->capacity *=2;
+    while (temp->capacity < temp->size)
+        temp->capacity *= 2;
     temp->chars = (char*) malloc(sizeof(char) * (size_t) temp->capacity);
-    strcpy(chars, temp->chars);
-    
+    strcpy(temp->chars, chars);
+
     return temp;
 }
 
@@ -81,7 +85,7 @@ void copy_string(string* dest, const string* src) {
     // Reallocate if needed
     if (dest->capacity < src->size + 1) {
         dest->capacity = src->size + 1;
-        dest->chars = realloc(dest->chars, (size_t)(dest->capacity));
+        dest->chars = realloc(dest->chars, (size_t) (dest->capacity));
         if (!dest->chars) {
             perror("realloc failed");
             exit(EXIT_FAILURE);
@@ -96,4 +100,30 @@ void reallocate_string(string* str) {
     int oldCapacity = str->capacity;
     str->capacity = 2 * oldCapacity;
     str->chars = (char*) realloc(str->chars, sizeof(char) * (size_t) str->capacity);
+}
+
+int is_executable(const char* path) {
+    return access(path, X_OK) == 0;
+}
+
+char* find_in_path(const char* command) {
+    char* path_env = getenv("PATH");
+    if (path_env == NULL)
+        return NULL;
+
+    char* path_copy = strdup(path_env);
+    char* dir = strtok(path_copy, ":");
+
+    static char full_path[PATH_MAX];
+
+    while (dir != NULL) {
+        snprintf(full_path, sizeof(full_path), "%s/%s", dir, command);
+        if (is_executable(full_path) == 1) {
+            free(path_copy);
+            return full_path;
+        }
+        dir = strtok(NULL, ":");
+    }
+    free(path_copy);
+    return NULL;
 }

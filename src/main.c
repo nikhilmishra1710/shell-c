@@ -1,4 +1,5 @@
 #include "include/constants.h"
+#include "include/execute.h"
 #include "include/input.h"
 #include "include/parser.h"
 #include "include/utils.h"
@@ -13,6 +14,7 @@ int main(void) {
         printf("Input: %s\n", input->chars);
         int cmd_count = pipe_commands(input, cmds);
         printf("Cmd count: %d\n", cmd_count);
+        execute_cmds(cmds, cmd_count);
     }
 
     return 0;
