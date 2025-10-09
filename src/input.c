@@ -1,4 +1,5 @@
 #include "include/input.h"
+#include "include/autocomplete.h"
 #include "include/constants.h"
 #include "include/history.h"
 #include "include/terminal.h"
@@ -24,7 +25,7 @@ static void refresh_input_line(string* cmd, int cursor_index) {
     fflush(stdout);
 }
 
-static void handle_arrow_input(int* index, cmd_history_t* history_obj) {
+static void handle_arrow_input(int* index, string* input_buffer) {
     char seq[2];
     if (read(STDIN_FILENO, &seq[0], 1) == -1 || read(STDIN_FILENO, &seq[1], 1) == -1) {
         perror("Failed read");
@@ -36,13 +37,13 @@ static void handle_arrow_input(int* index, cmd_history_t* history_obj) {
         if (seq[1] == 'A') {
             temp_obj = get_previous_history();
             *index = temp_obj->cmd->size;
-            copy_string(history_obj->cmd, temp_obj->cmd);
+            copy_string(input_buffer, temp_obj->cmd);
         } else if (seq[1] == 'B') {
             temp_obj = get_next_history();
             *index = temp_obj->cmd->size;
-            copy_string(history_obj->cmd, temp_obj->cmd);
+            copy_string(input_buffer, temp_obj->cmd);
         } else if (seq[1] == 'C') {
-            if (*index < history_obj->cmd->size) {
+            if (*index < input_buffer->size) {
                 printf("\033[C");
                 (*index)++;
             } else {
@@ -63,8 +64,8 @@ static void handle_arrow_input(int* index, cmd_history_t* history_obj) {
             }
             if (del == '~') {
                 // Delete Key Pressed
-                if(*index != history_obj->cmd->size){
-                    update_string_at(history_obj->cmd, *index, del, true);
+                if(*index != input_buffer->size){
+                    update_string_at(input_buffer, *index, del, true);
                 }
             } 
         }
@@ -73,36 +74,55 @@ static void handle_arrow_input(int* index, cmd_history_t* history_obj) {
 
 string* read_input() {
     cmd_history_t* history_obj = create_new_history_obj();
+    string* input_buffer = allocate_string();
     print_prompt();
     char c;
-    int index = 0;
+    int index = 0, double_tab = 0;
     while (true) {
         read(STDIN_FILENO, &c, 1);
         if (c == '\033') {
-            handle_arrow_input(&index, history_obj);
+            handle_arrow_input(&index, input_buffer);
         } else if (c == '\n') {
             printf("\n");
             break;
         } else if (c == 127) {
-            if (index == history_obj->cmd->size) {
-                if (update_string(history_obj->cmd, c, true)) {
+            if (index == input_buffer->size) {
+                if (update_string(input_buffer, c, true)) {
                     index--;
                 }
             } else {
-                if (update_string_at(history_obj->cmd, index - 1, c, true))
+                if (update_string_at(input_buffer, index - 1, c, true))
                     index--;
             }
-        } else {
-            if (index == history_obj->cmd->size) {
-                if (update_string(history_obj->cmd, c, false))
+        } else if (c=='\t') {
+            int partial_completion = 0;
+            index = autocomplete(input_buffer, double_tab, &partial_completion);
+            
+            if(index > 0){
+                if (partial_completion == 0) {
+                    update_string(input_buffer, ' ', false);
+                }
+            } else if (index == 0) {
+                index = input_buffer->size;
+                double_tab = 0;
+            } else {
+                index = input_buffer->size;
+                double_tab = 1;
+            }
+        } 
+        else {
+            if (index == input_buffer->size) {
+                if (update_string(input_buffer, c, false))
                     index++;
             } else {
-                if (update_string_at(history_obj->cmd, index, c, false))
+                if (update_string_at(input_buffer, index, c, false))
                     index++;
             }
+            copy_string(history_obj->cmd, input_buffer);
         }
-        refresh_input_line(history_obj->cmd, index);
+        refresh_input_line(input_buffer, index);
     }
 
+    free(input_buffer);
     return history_obj->cmd;
 }

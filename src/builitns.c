@@ -1,4 +1,5 @@
 #include "include/builtins.h"
+#include "include/constants.h"
 #include "include/redirection.h"
 #include <linux/limits.h>
 #include <stdio.h>
@@ -108,6 +109,14 @@ int process_cd(char* args[], int argc, string* outfile_name, int outfile_mode, s
         printf("cd: %s: No such file or directory\n", args[1]);
     }
     return 0;
+}
+
+builtin_command_t get_builtin_command(int i) {
+    return builtin_commands[i];
+}
+
+int get_builtin_command_size() {
+    return ARRAY_SIZE(builtin_commands);
 }
 
 void execute_builtins(int* check, int* found, char** args, int token_num, string* outfile_name,

@@ -10,7 +10,7 @@ typedef struct {
 } string;
 
 string* allocate_string(void);
-string* allocate_string_chars(char* chars);
+string* allocate_string_chars(const char* chars);
 bool update_string(string* str, char c, bool remove);
 bool update_string_at(string* str, int index, char ch, bool remove);
 void copy_string(string* dest, const string* src);

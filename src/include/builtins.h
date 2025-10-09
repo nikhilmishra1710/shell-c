@@ -19,7 +19,8 @@ int process_pwd(char* args[], int argc, string* outfile_name, int outfile_mode,
                 string* errfile_name, int errfile_mode);
 int process_cd(char* args[], int argc, string* outfile_name, int outfile_mode, string* errfile_name,
                int errfile_mode);
-
+int get_builtin_command_size(void);
+builtin_command_t get_builtin_command(int i);
 void execute_builtins(int* check, int* found, char** args, int token_num, string* outfile_name,
-                     int outfile_mode, string* errfile_name, int errfile_mode);
+                      int outfile_mode, string* errfile_name, int errfile_mode);
 #endif

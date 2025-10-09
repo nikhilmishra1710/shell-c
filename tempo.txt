@@ -1,0 +1,8 @@
+Makefile
+bin
+main
+main.c
+main.txt
+obj
+src
+tempo.txt

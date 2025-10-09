@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 #include "include/utils.h"
 #include <linux/limits.h>
 #include <stdbool.h>
@@ -15,10 +16,11 @@ string* allocate_string() {
         printf("Error in allocating string");
         exit(1);
     }
+    temp->chars[0] = '\0';
     return temp;
 }
 
-string* allocate_string_chars(char* chars) {
+string* allocate_string_chars(const char* chars) {
     if (chars == NULL)
         return allocate_string();
     string* temp = (string*) malloc(sizeof(string));
