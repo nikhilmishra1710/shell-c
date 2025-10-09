@@ -41,10 +41,13 @@ static void execute_cmd(string* input) {
                                      &errfile_mode);
 
     char* args[MAX_LENGTH];
+    printf("token_count: %d\n", token_count);
     for (int i = 0; i < token_count; i++) {
+        printf("i: %d %s\n", i, tokens[i]->chars);
         args[i] = tokens[i]->chars;
         printf("args[%d]: %s\n", i, args[i]);
     }
+    printf("Starting execution\n");
     int found = 0;
     int check = 0;
 
