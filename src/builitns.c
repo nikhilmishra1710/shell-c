@@ -93,6 +93,7 @@ int process_cd(char* args[], int argc, string* outfile_name, int outfile_mode, s
     (void) outfile_mode;
     (void) errfile_name;
     (void) errfile_mode;
+    printf("argc: %d\n", argc);
     if (argc == 1) {
         char* home_env = getenv("HOME");
         printf("home: %s\n", home_env);
@@ -100,14 +101,16 @@ int process_cd(char* args[], int argc, string* outfile_name, int outfile_mode, s
             perror("HOME");
         if (chdir(home_env) != 0)
             perror("cd HOME");
-    } else if (strncmp(args[1], "~", 1) == 0) {
+    } else if (argc == 2 && strncmp(args[1], "~", 1) == 0) {
         char* home_env = getenv("HOME");
         if (home_env == NULL)
             perror("HOME");
         if (chdir(home_env) != 0)
             perror("cd HOME");
-    } else if (chdir(args[1]) != 0) {
+    } else if (argc == 2 && chdir(args[1]) != 0) {
         printf("cd: %s: No such file or directory\n", args[1]);
+    } else if (argc > 2) {
+        printf("Usage cd <path> (Only one path value is supported)");
     }
     return 0;
 }
