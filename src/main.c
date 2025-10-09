@@ -16,6 +16,5 @@ int main(void) {
         printf("Cmd count: %d\n", cmd_count);
         execute_cmds(cmds, cmd_count);
     }
-
     return 0;
 }

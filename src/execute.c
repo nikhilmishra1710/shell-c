@@ -65,115 +65,89 @@ static void execute_cmd(string* input) {
     }
 
     for (int i = 0; i < token_count; i++) {
-        free(args[i]);
-        free(tokens[i]);
+        free_string(tokens[i]);
     }
 
-    free(outfile_name);
-    free(errfile_name);
-
+    free_string(outfile_name);
+    free_string(errfile_name);
     restore_redirection(saved_stdout, saved_stderr);
 }
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <sys/wait.h>
-
-static void execute_pipe_cmd(string **cmds, int cmd_count)
-{
+static void execute_pipe_cmd(string** cmds, int cmd_count) {
     int pipefd[2];
     int prev_pipe_read = STDIN_FILENO;
     pid_t pids[cmd_count];
 
-    for (int i = 0; i < cmd_count; i++)
-    {
+    for (int i = 0; i < cmd_count; i++) {
         // Create a pipe if this is not the last command
-        if (i < cmd_count - 1)
-        {
-            if (pipe(pipefd) < 0)
-            {
+        if (i < cmd_count - 1) {
+            if (pipe(pipefd) < 0) {
                 perror("pipe");
                 exit(EXIT_FAILURE);
             }
         }
 
         pid_t pid = fork();
-        if (pid == 0)
-        {
+        if (pid == 0) {
             // ----- CHILD -----
 
             // If not the first command, read from previous pipe
-            if (i > 0)
-            {
-                if (dup2(prev_pipe_read, STDIN_FILENO) < 0)
-                {
+            if (i > 0) {
+                if (dup2(prev_pipe_read, STDIN_FILENO) < 0) {
                     perror("dup2 prev_pipe_read");
                     exit(EXIT_FAILURE);
                 }
             }
 
             // If not the last command, write to next pipe
-            if (i < cmd_count - 1)
-            {
-                if (dup2(pipefd[1], STDOUT_FILENO) < 0)
-                {
+            if (i < cmd_count - 1) {
+                if (dup2(pipefd[1], STDOUT_FILENO) < 0) {
                     perror("dup2 pipe write");
                     exit(EXIT_FAILURE);
                 }
             }
 
             // Close unneeded FDs in the child
-            if (i < cmd_count - 1)
-            {
+            if (i < cmd_count - 1) {
                 close(pipefd[0]);
                 close(pipefd[1]);
             }
             if (prev_pipe_read != STDIN_FILENO)
                 close(prev_pipe_read);
-            
+
             printf("cmd[%d]: %s\n", i, cmds[i]->chars);
             execute_cmd(cmds[i]); // Run the command
             exit(EXIT_SUCCESS);
-        }
-        else if (pid < 0)
-        {
+        } else if (pid < 0) {
             perror("fork");
             exit(EXIT_FAILURE);
-        }
-        else
-        {
+        } else {
             // ----- PARENT -----
             pids[i] = pid;
 
             // Close write-end of current pipe in parent
-            if (i < cmd_count - 1)
-            {
+            if (i < cmd_count - 1) {
                 close(pipefd[1]);
             }
 
             // Close previous pipe (not needed anymore)
-            if (prev_pipe_read != STDIN_FILENO)
-            {
+            if (prev_pipe_read != STDIN_FILENO) {
                 close(prev_pipe_read);
             }
 
             // Next command should read from this pipe
-            if (i < cmd_count - 1)
-            {
+            if (i < cmd_count - 1) {
                 prev_pipe_read = pipefd[0];
             }
         }
     }
 
     // ----- PARENT: Wait for all children -----
-    for (int i = 0; i < cmd_count; i++)
-    {
+    for (int i = 0; i < cmd_count; i++) {
         int status;
         waitpid(pids[i], &status, 0);
     }
 }
-
 
 void execute_cmds(string* cmd[MAX_CMDS], int cmd_count) {
     if (cmd_count == 0) {
@@ -185,5 +159,9 @@ void execute_cmds(string* cmd[MAX_CMDS], int cmd_count) {
             printf("%d: %s\n", i, cmd[i]->chars);
         }
         execute_pipe_cmd(cmd, cmd_count);
+    }
+
+    for(int i=0; i<cmd_count; i++) {
+        free_string(cmd[i]);
     }
 }

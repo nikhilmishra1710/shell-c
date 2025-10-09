@@ -123,6 +123,6 @@ string* read_input() {
         refresh_input_line(input_buffer, index);
     }
 
-    free(input_buffer);
+    free_string(input_buffer);
     return history_obj->cmd;
 }

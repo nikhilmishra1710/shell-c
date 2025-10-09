@@ -104,6 +104,12 @@ void reallocate_string(string* str) {
     str->chars = (char*) realloc(str->chars, sizeof(char) * (size_t) str->capacity);
 }
 
+void free_string(string* str) {
+    if(!str) return;
+    free(str->chars);
+    free(str);
+}
+
 int is_executable(const char* path) {
     return access(path, X_OK) == 0;
 }

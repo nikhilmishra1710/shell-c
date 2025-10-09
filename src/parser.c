@@ -51,7 +51,8 @@ int pipe_commands(string* input, string* cmds[MAX_CMDS]) {
     }
 
     cmds[count] = NULL;
-    free(working_cp);
+    free_string(working_cp);
+    if (cmd) free(cmd);
 
     return count;
 }
