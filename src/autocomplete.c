@@ -49,7 +49,6 @@ int autocomplete(string* input, int double_tab, int* partial_completion) {
     int found = 0, idx = -1;
     for (int i = 0; i < get_builtin_command_size(); i++) {
         if ((strncmp(input->chars, get_builtin_command(i).name, (size_t)input->size) == 0)) {
-            printf("Builtin found: %s\n", get_builtin_command(i).name);
             found = 1;
             idx = i;
         }

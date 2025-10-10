@@ -93,18 +93,16 @@ int process_cd(char* args[], int argc, string* outfile_name, int outfile_mode, s
     (void) outfile_mode;
     (void) errfile_name;
     (void) errfile_mode;
-    printf("argc: %d\n", argc);
     if (argc == 1) {
         char* home_env = getenv("HOME");
-        printf("home: %s\n", home_env);
         if (home_env == NULL)
-            perror("HOME");
+            perror("HOME dir not defined");
         if (chdir(home_env) != 0)
             perror("cd HOME");
     } else if (argc == 2 && strncmp(args[1], "~", 1) == 0) {
         char* home_env = getenv("HOME");
         if (home_env == NULL)
-            perror("HOME");
+            perror("HOME dir not defined");
         if (chdir(home_env) != 0)
             perror("cd HOME");
     } else if (argc == 2 && chdir(args[1]) != 0) {
@@ -125,12 +123,11 @@ int get_builtin_command_size() {
 
 void execute_builtins(int* check, int* found, char** args, int token_num, string* outfile_name,
                       int outfile_mode, string* errfile_name, int errfile_mode) {
-    for (int i = 0; i < (int) (ARRAY_SIZE(builtin_commands)); i++) {
-        printf("builtin cmd: %s\n", builtin_commands[i].name);
+    for (int i = 0; i < (int) (ARRAY_SIZE(builtin_commands)) && *found == 0; i++) {
+        // printf("builtin cmd: %s\n", builtin_commands[i].name);
         if (strncmp(args[0], builtin_commands[i].name, strlen(builtin_commands[i].name)) == 0) {
             *check = builtin_commands[i].process(args, token_num, outfile_name, outfile_mode,
                                                  errfile_name, errfile_mode);
-            printf("Builtin execution complete\n");
             *found = 1;
         }
     }

@@ -33,21 +33,20 @@ static void execute_cmd(string* input) {
 
     int token_count = tokenize(input, tokens);
 
-    for (int i = 0; i < token_count; i++) {
-        printf("%d: %s\n", i, tokens[i]->chars);
-    }
+    // for (int i = 0; i < token_count; i++) {
+    //     printf("%d: %s\n", i, tokens[i]->chars);
+    // }
 
     token_count = output_redirection(tokens, token_count, outfile_name, &outfile_mode, errfile_name,
                                      &errfile_mode);
 
     char* args[MAX_LENGTH];
-    printf("token_count: %d\n", token_count);
+    // printf("token_count: %d\n", token_count);
     for (int i = 0; i < token_count; i++) {
-        printf("i: %d %s\n", i, tokens[i]->chars);
         args[i] = tokens[i]->chars;
-        printf("args[%d]: %s\n", i, args[i]);
+        // printf("args[%d]: %s\n", i, args[i]);
     }
-    printf("Starting execution\n");
+    // printf("Starting execution\n");
     int found = 0;
     int check = 0;
 
@@ -118,7 +117,7 @@ static void execute_pipe_cmd(string** cmds, int cmd_count) {
             if (prev_pipe_read != STDIN_FILENO)
                 close(prev_pipe_read);
 
-            printf("cmd[%d]: %s\n", i, cmds[i]->chars);
+            // printf("cmd[%d]: %s\n", i, cmds[i]->chars);
             execute_cmd(cmds[i]); // Run the command
             exit(EXIT_SUCCESS);
         } else if (pid < 0) {
@@ -158,9 +157,9 @@ void execute_cmds(string* cmd[MAX_CMDS], int cmd_count) {
     } else if (cmd_count == 1) {
         execute_cmd(cmd[cmd_count - 1]);
     } else {
-        for (int i = 0; i < cmd_count; i++) {
-            printf("%d: %s\n", i, cmd[i]->chars);
-        }
+        // for (int i = 0; i < cmd_count; i++) {
+        //     printf("%d: %s\n", i, cmd[i]->chars);
+        // }
         execute_pipe_cmd(cmd, cmd_count);
     }
 

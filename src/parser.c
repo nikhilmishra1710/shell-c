@@ -40,13 +40,13 @@ int pipe_commands(string* input, string* cmds[MAX_CMDS]) {
     }
 
     cmd = strtok(working_cp->chars, "|");
-    printf("Pipe breakup\n");
+    // printf("Pipe breakup\n");
     while (cmd && count < MAX_CMDS) {
         while (isspace((unsigned char) *cmd)) {
             cmd++;
         }
         cmds[count++] = allocate_string_chars(cmd);
-        printf("%d: %s\n", count-1, cmds[count-1]->chars);
+        // printf("%d: %s\n", count-1, cmds[count-1]->chars);
         cmd = strtok(NULL, "|");
     }
 

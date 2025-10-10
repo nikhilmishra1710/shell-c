@@ -27,11 +27,11 @@ int output_redirection(string* tokens[MAX_CMDS], int token_count, string* outfil
             buffer_tokens[k++] = tokens[i];
         }
     }
-    printf("After Output Redirection\n");
-    printf("Outfile: %s mode: %d\n", outfile_name->chars, *outfile_mode);
-    printf("Errfile: %s mode: %d\n", errfile_name->chars, *errfile_mode);
+    // printf("After Output Redirection\n");
+    // printf("Outfile: %s mode: %d\n", outfile_name->chars, *outfile_mode);
+    // printf("Errfile: %s mode: %d\n", errfile_name->chars, *errfile_mode);
     for (int i = 0; i < k; i++) {
-        printf("%d: %s\n", i, buffer_tokens[i]->chars);
+        // printf("%d: %s\n", i, buffer_tokens[i]->chars);
         tokens[i] = buffer_tokens[i];
     }
 
