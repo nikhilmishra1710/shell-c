@@ -64,10 +64,10 @@ static void handle_arrow_input(int* index, string* input_buffer) {
             }
             if (del == '~') {
                 // Delete Key Pressed
-                if(*index != input_buffer->size){
+                if (*index != input_buffer->size) {
                     update_string_at(input_buffer, *index, del, true);
                 }
-            } 
+            }
         }
     }
 }
@@ -94,11 +94,12 @@ string* read_input() {
                 if (update_string_at(input_buffer, index - 1, c, true))
                     index--;
             }
-        } else if (c=='\t') {
+
+        } else if (c == '\t') {
             int partial_completion = 0;
             index = autocomplete(input_buffer, double_tab, &partial_completion);
-            
-            if(index > 0){
+
+            if (index > 0) {
                 if (partial_completion == 0) {
                     update_string(input_buffer, ' ', false);
                 }
@@ -109,8 +110,7 @@ string* read_input() {
                 index = input_buffer->size;
                 double_tab = 1;
             }
-        } 
-        else {
+        } else {
             if (index == input_buffer->size) {
                 if (update_string(input_buffer, c, false))
                     index++;
@@ -118,10 +118,10 @@ string* read_input() {
                 if (update_string_at(input_buffer, index, c, false))
                     index++;
             }
-            copy_string(history_obj->cmd, input_buffer);
         }
         refresh_input_line(input_buffer, index);
     }
+    copy_string(history_obj->cmd, input_buffer);
 
     free_string(input_buffer);
     return history_obj->cmd;
